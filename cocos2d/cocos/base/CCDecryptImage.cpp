@@ -4,15 +4,22 @@
 #include "CCAES.h"
 #include "ccMacros.h"
 
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_WIN32)
+#include <WinSock.h>
+#pragma comment(lib, "ws2_32.lib")
+#elif (CC_TARGET_PLATFORM == CC_PLATFORM_IOS || CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID)
+#include <netinet/in.h>
+#endif
+
 namespace cocos2d
 {
-	/* crc码长度 */
+	/* CRC码长度 */
 	static const uint32_t CRC_SIZE = 4;
 
-	/* png文件头部 */
+	/* 文件头部 */
 	static const unsigned char HEAD_DATA[] = { 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a };
 
-	/* png尾部crc码 */
+	/* IEND CRC码 */
 	static const unsigned char IEND_DATA[] = { 0xae, 0x42, 0x60, 0x82 };
 
 	/* 数据块头部（用于验证解密是否成功） */
@@ -26,7 +33,7 @@ namespace cocos2d
 	struct Block
 	{
 		char name[4];
-		uint64_t pos;
+		uint32_t pos;
 		uint32_t size;
 	};
 
@@ -78,16 +85,20 @@ namespace cocos2d
 	{
 		CCAssert(!data.isNull(), "data is null!");
 
-		const uint64_t block_start_pos = *reinterpret_cast<uint64_t *>(data.getBytes() + data.getSize() - sizeof(uint64_t));
+		// 获取数据块信息位置
+		const uint32_t block_start_pos = ntohl(*reinterpret_cast<uint32_t *>(data.getBytes() + data.getSize() - sizeof(uint32_t)));
 
+		// 获取数据块信息
 		std::stringstream block_info;
-		for (uint64_t i = block_start_pos; i < data.getSize() - sizeof(uint64_t); ++i)
+		for (uint32_t i = block_start_pos; i < data.getSize() - sizeof(uint32_t); ++i)
 		{
 			block_info.put(*(data.getBytes() + i));
 		}
 
+		// 解密数据块信息
 		DecryptBlock(block_info, DEAULT_KEY);
 
+		// 验证数据块信息是否解密成功
 		auto block_head = ReadSome<sizeof(BLOCK_HEAD)>(block_info);
 		for (unsigned int i = 0; i < block_head.size(); ++i)
 		{
@@ -97,11 +108,12 @@ namespace cocos2d
 			}
 		}
 
+		// 写入文件头信息
 		std::vector<unsigned char> image_data;
 		image_data.reserve(data.getSize());
-
 		for (auto ch : HEAD_DATA) image_data.push_back(ch);
 
+		// 写入数据块信息
 		while (true)
 		{
 			Block block;
@@ -110,15 +122,16 @@ namespace cocos2d
 			{
 				CCAssert(false, "");
 				CCLOG("the %s file format error!", filename.c_str());
-				break;
 			}
 
-			char reverse_size[sizeof(block.size)];
-			memcpy(reverse_size, &block.size, sizeof(reverse_size));
-			std::reverse(reverse_size, reverse_size + sizeof(reverse_size));
-
-			for (auto ch : reverse_size) image_data.push_back(ch);
+			// 写入数据块长度和名称
+			char size_buffer[sizeof(block.size)];
+			memcpy(size_buffer, &block.size, sizeof(size_buffer));
+			for (auto ch : size_buffer) image_data.push_back(ch);
 			for (auto ch : block.name) image_data.push_back(ch);
+
+			block.pos = ntohl(block.pos);
+			block.size = ntohl(block.size);
 
 			std::string s_name(block.name, sizeof(block.name));
 			if (strcmp(s_name.c_str(), "IHDR") == 0)
