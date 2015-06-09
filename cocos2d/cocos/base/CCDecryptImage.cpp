@@ -133,15 +133,16 @@ namespace cocos2d
 			block.pos = ntohl(block.pos);
 			block.size = ntohl(block.size);
 
-			std::string s_name(block.name, sizeof(block.name));
-			if (strcmp(s_name.c_str(), "IHDR") == 0)
+			char block_name[sizeof(block.name) + 1] = { 0 };
+			memcpy(block_name, block.name, sizeof(block.name));
+			if (strcmp(block_name, "IHDR") == 0)
 			{
 				IHDRBlock ihdr;
 				memcpy(&ihdr, &block, sizeof(Block));
 				memcpy(((char *)&ihdr) + sizeof(Block), &ReadSome<sizeof(IHDRBlock) - sizeof(Block)>(block_info)[0], sizeof(IHDRBlock) - sizeof(Block));
 				for (auto ch : ihdr.data) image_data.push_back(ch);
 			}
-			else if (strcmp(s_name.c_str(), "IEND") == 0)
+			else if (strcmp(block_name, "IEND") == 0)
 			{
 				for (auto ch : IEND_DATA) image_data.push_back(ch);
 				CCLOG("decrypt %s success!", filename.c_str());
