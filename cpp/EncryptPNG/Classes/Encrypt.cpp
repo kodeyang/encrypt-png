@@ -1,8 +1,9 @@
 ﻿#include "Encrypt.h"
 
+#include "Files.h"
 #include <fstream>
 #include <iostream>
-#include "Files.h"
+#pragma comment(lib, "ws2_32.lib")
 
 /**
  * 写入单个文件数据
@@ -31,8 +32,7 @@ void WriteFileData(const std::string &filename, std::ofstream &outstream, std::s
 		// 获取数据块长度
 		auto lenght = ReadSome<4>(file);
 		if (file.eof()) break;
-		std::reverse(lenght.begin(), lenght.end());
-		auto block_size = *reinterpret_cast<int *>(&lenght[0]);
+		auto block_size = ntohl(*reinterpret_cast<uint32_t *>(&lenght[0]));
 
 		// 获取数据块名称
 		auto block_name = &(ReadSome<4>(file)[0]);
@@ -41,8 +41,8 @@ void WriteFileData(const std::string &filename, std::ofstream &outstream, std::s
 		auto block_data = ReadLarge(file, block_size + CRC_SIZE);
 
 		// 数据块信息
-		block.size = block_size;
-		block.pos = outstream.tellp();
+		block.size = htonl(block_size);
+		block.pos = htonl((uint32_t)outstream.tellp());
 		memcpy(block.name, &block_name[0], sizeof(block.name));
 
 		// 根据数据类型进行处理
@@ -88,18 +88,22 @@ void EncryptPNG(const std::vector<std::string> &filelist, const aes_key &key)
 			std::cerr << "创建" << filename << " 失败！" << std::endl;
 			continue;
 		}
+
+		// 写入文件数据
 		WriteFileData(filename, out_file, block_info);
 
 		// 记录起始位置
-		uint64_t pos = out_file.tellp();
-		char *user_data = reinterpret_cast<char *>(&pos);
+		uint32_t pos = htonl((uint32_t)out_file.tellp());
 
 		// 数据块信息加密
 		EncryptBlock(block_info, key);
 
 		// 写入数据块信息
 		StreamMove(out_file, block_info, uint32_t(block_info.tellp() - block_info.tellg()));
-		for (unsigned int i = 0; i < sizeof(uint64_t); ++i) out_file.put(user_data[i]);
+
+		// 写入数据块信息位置
+		char *user_data = reinterpret_cast<char *>(&pos);
+		for (unsigned int i = 0; i < sizeof(pos); ++i) out_file.put(user_data[i]);
 
 		std::cout << "已生成：" << out_path.c_str() << std::endl;
 

@@ -1,8 +1,9 @@
 ﻿#include "Decrypt.h"
 
+#include "Files.h"
 #include <fstream>
 #include <iostream>
-#include "Files.h"
+#pragma comment(lib, "ws2_32.lib")
 
 
 // 解密PNG图片
@@ -18,13 +19,13 @@ void DecryptPNG(const std::vector<std::string> &filelist, const aes_key &key)
 		}
 
 		// 读取数据块位置
-		uint64_t end_pos = in_file.tellg();
-		in_file.seekg(end_pos - sizeof(uint64_t));
-		uint64_t block_start_pos = *reinterpret_cast<uint64_t *>(&(ReadSome<sizeof(uint64_t)>(in_file)[0]));
+		uint32_t end_pos = (uint32_t)in_file.tellg();
+		in_file.seekg(end_pos - sizeof(uint32_t));
+		uint32_t block_start_pos = ntohl(*reinterpret_cast<uint32_t *>(&(ReadSome<sizeof(uint32_t)>(in_file)[0])));
 		in_file.seekg(block_start_pos);
 
 		// 解密数据块信息
-		auto block_info = ReadLarge(in_file, uint32_t(end_pos - sizeof(uint64_t) - block_start_pos));
+		auto block_info = ReadLarge(in_file, uint32_t(end_pos - sizeof(uint32_t) - block_start_pos));
 		DecryptBlock(block_info, key);
 
 		// 验证数据块内容
@@ -63,10 +64,11 @@ void DecryptPNG(const std::vector<std::string> &filelist, const aes_key &key)
 			}
 
 			// 写入数据块长度
-			char reverse_size[sizeof(block.size)];
-			memcpy(reverse_size, &block.size, sizeof(reverse_size));
-			std::reverse(reverse_size, reverse_size + sizeof(reverse_size));
-			WriteToSteam(reverse_size, sizeof(reverse_size), out_file);
+			WriteToSteam(&block.size, sizeof(block.size), out_file);
+
+			// 大小端转换
+			block.pos = ntohl(block.pos);
+			block.size = ntohl(block.size);
 
 			// 写入数据块名称
 			WriteToSteam(&block.name, sizeof(block.name), out_file);

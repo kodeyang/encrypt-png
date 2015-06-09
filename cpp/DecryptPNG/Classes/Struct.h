@@ -17,7 +17,7 @@ static const unsigned char BLOCK_HEAD[] = { 0x45, 0x6e, 0x63, 0x72, 0x79, 0x70, 
 struct Block
 {
 	char name[4];
-	uint64_t pos;
+	uint32_t pos;
 	uint32_t size;
 };
 
