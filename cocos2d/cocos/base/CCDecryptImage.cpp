@@ -24,7 +24,7 @@ namespace cocos2d
 	static const unsigned char IEND_DATA[] = { 0xae, 0x42, 0x60, 0x82 };
 
 	/* 默认密钥 */
-	static const aes_key DEAULT_KEY = { 0x31, 0x32, 0x33 };
+	static const aes_key DEAULT_KEY = { 0x31, 0x32, 0x33, 0x34, 0x35, 0x36 };
 
 #pragma pack(push, 1)
 
