@@ -150,6 +150,7 @@ base/ccUtils.cpp \
 base/etc1.cpp \
 base/pvr.cpp \
 base/s3tc.cpp \
+base/CCCRC32.cpp \
 base/CCController.cpp \
 base/CCController-android.cpp \
 base/allocator/CCAllocatorDiagnostics.cpp \

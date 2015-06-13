@@ -1,5 +1,6 @@
 ﻿#include "Encrypt.h"
 
+#include "CRC32.h"
 #include "Files.h"
 #include <fstream>
 #include <iostream>
@@ -9,16 +10,17 @@
  * 写入单个文件数据
  * @param filename 文件名称
  * @param outstream 输出文件流
- * @param blockinfo 输出块信息
+ * @return 数据块信息
  */
-void WriteFileData(const std::string &filename, std::ofstream &outstream, std::stringstream &block_info)
+std::stringstream WriteFileData(const std::string &filename, std::ofstream &outstream)
 {
 	std::ifstream file;
+	std::stringstream block_info;
 	file.open(filename, std::ios::binary);
 	if (!file.is_open())
 	{
 		std::cerr << "打开" << filename << " 失败！" << std::endl;
-		return;
+		return block_info;
 	}
 
 	// 读取文件头
@@ -52,48 +54,50 @@ void WriteFileData(const std::string &filename, std::ofstream &outstream, std::s
 			IHDRBlock ihdr;
 			ihdr.block = block;
 			memcpy(ihdr.data, block_data.str().c_str(), sizeof(ihdr.data));
-			WriteToSteam(&ihdr, sizeof(IHDRBlock), block_info);
+			SteamCopy(block_info, &ihdr, sizeof(IHDRBlock));
 		}
 		else if (strcmp(s_name.c_str(), "IEND") == 0)
 		{
-			WriteToSteam(&block, sizeof(Block), block_info);
+			SteamCopy(block_info, &block, sizeof(Block));
 		}
 		else
 		{
-			WriteToSteam(&block, sizeof(Block), block_info);
+			SteamCopy(block_info, &block, sizeof(Block));
 			StreamMove(outstream, block_data, block_size + CRC_SIZE);
 		}
 	}
+	return block_info;
 }
 
 // 加密PNG图片
 void EncryptPNG(const std::vector<std::string> &filelist, const aes_key &key)
 {
-	std::ofstream out_file;
-	std::stringstream block_info;
-
 	for (auto &filename : filelist)
 	{
-		// 文件信息头部
-		for (auto ch : BLOCK_HEAD) block_info.put(ch);
-
 		// 写入文件数据
 		std::string out_path = path::splitext(filename)[0] + ".epng";
-		out_file.open(out_path, std::ios::binary);
+		std::ofstream out_file(out_path, std::ios::binary);
 		if (!out_file.is_open())
 		{
-			out_file.close();
-			block_info.str("");
-			block_info.clear();
 			std::cerr << "创建" << filename << " 失败！" << std::endl;
 			continue;
 		}
 
 		// 写入文件数据
-		WriteFileData(filename, out_file, block_info);
+		std::stringstream block_info = WriteFileData(filename, out_file);
+		uint32_t block_size = uint32_t(block_info.tellp() - block_info.tellg());
+		if (block_size == 0) continue;
 
 		// 记录起始位置
-		uint32_t pos = htonl((uint32_t)out_file.tellp());
+		uint32_t block_start_pos = htonl((uint32_t)out_file.tellp());
+
+		// 写入数据块信息大小
+		block_size = htonl(block_size);
+		SteamCopy(out_file, &block_size, sizeof(block_size));
+
+		// 写入校验和
+		uint32_t crc32 = htonl(CRC32(block_info.str()).GetChecksum());
+		SteamCopy(block_info, &crc32, sizeof(crc32));
 
 		// 数据块信息加密
 		EncryptBlock(block_info, key);
@@ -102,13 +106,9 @@ void EncryptPNG(const std::vector<std::string> &filelist, const aes_key &key)
 		StreamMove(out_file, block_info, uint32_t(block_info.tellp() - block_info.tellg()));
 
 		// 写入数据块信息位置
-		char *user_data = reinterpret_cast<char *>(&pos);
-		for (unsigned int i = 0; i < sizeof(pos); ++i) out_file.put(user_data[i]);
+		char *user_data = reinterpret_cast<char *>(&block_start_pos);
+		for (unsigned int i = 0; i < sizeof(block_start_pos); ++i) out_file.put(user_data[i]);
 
 		std::cout << "已生成：" << out_path.c_str() << std::endl;
-
-		out_file.close();
-		block_info.str("");
-		block_info.clear();
 	}
 }

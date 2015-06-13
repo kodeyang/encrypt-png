@@ -2,6 +2,7 @@
 #include "Files.h"
 #include "Encrypt.h"
 
+
 int main()
 {
 	//  ‰»Î√‹‘ø

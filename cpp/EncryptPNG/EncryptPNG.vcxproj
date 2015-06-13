@@ -79,6 +79,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Classes\AES.h" />
+    <ClInclude Include="Classes\CRC32.h" />
     <ClInclude Include="Classes\Encrypt.h" />
     <ClInclude Include="Classes\Files.h" />
     <ClInclude Include="Classes\Struct.h" />
@@ -86,6 +87,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Classes\AES.cpp" />
+    <ClCompile Include="Classes\CRC32.cpp" />
     <ClCompile Include="Classes\Encrypt.cpp" />
     <ClCompile Include="Main.cpp" />
   </ItemGroup>

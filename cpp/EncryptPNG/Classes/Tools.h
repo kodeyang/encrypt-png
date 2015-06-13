@@ -3,6 +3,7 @@
 #include <array>
 #include <vector>
 #include <sstream>
+#include <cassert>
 #include "AES.h"
 #include "Struct.h"
 
@@ -29,17 +30,18 @@ static std::stringstream ReadLarge(_Stream &stream, const int readsize)
 }
 
 /**
- * 将数据写到流中
+ * 拷贝数据到流
  */
 template <typename _Stream>
-static void WriteToSteam(const void *data, uint32_t size, _Stream &stream)
+static void SteamCopy(_Stream &stream, const void *data, uint32_t size)
 {
+	assert(data && size > 0);
 	unsigned char *p = reinterpret_cast<unsigned char *>(const_cast<void *>(data));
 	for (unsigned int i = 0; i < size; ++i) stream.put(p[i]);
 }
 
 /**
- * 移动流数据到另一个流
+ * 移动流中数据到另一个流
  */
 template <typename _Source, typename _Target>
 static void StreamMove(_Target &target, _Source &source, const uint32_t size)
@@ -52,27 +54,31 @@ static void StreamMove(_Target &target, _Source &source, const uint32_t size)
  */
 static void EncryptBlock(std::stringstream &ss, const aes_key &key)
 {
-	const std::streamoff contents_size = ss.tellp() - ss.tellg();
-	const uint32_t block_size = (uint32_t)(contents_size + AES_BLOCK_SIZE - contents_size % AES_BLOCK_SIZE);
+	const uint32_t contents_size = uint32_t(ss.tellp() - ss.tellg());
+	uint32_t real_size = contents_size;
+	if (real_size % AES_BLOCK_SIZE) real_size += AES_BLOCK_SIZE - contents_size % AES_BLOCK_SIZE;
+
 	std::vector<uint8_t> buffer;
-	buffer.resize(block_size);
+	buffer.resize(real_size);
 	for (uint32_t i = 0; i < contents_size; ++i) buffer[i] = ss.get();
-	AES::EncryptData(&buffer[0], block_size, key);
+	AES::EncryptData(&buffer[0], real_size, key);
 	ss.seekg(0); ss.seekp(0);
-	for (uint32_t i = 0; i < block_size; ++i) ss.put(buffer[i]);
+	for (uint32_t i = 0; i < real_size; ++i) ss.put(buffer[i]);
 }
 
-/**
+/*
  * 数据块解密
  */
 static void DecryptBlock(std::stringstream &ss, const aes_key &key)
 {
-	const std::streamoff contents_size = ss.tellp() - ss.tellg();
-	const uint32_t block_size = (uint32_t)(contents_size + AES_BLOCK_SIZE - contents_size % AES_BLOCK_SIZE);
+	const uint32_t contents_size = uint32_t(ss.tellp() - ss.tellg());
+	uint32_t real_size = contents_size;
+	if (real_size % AES_BLOCK_SIZE) real_size += AES_BLOCK_SIZE - contents_size % AES_BLOCK_SIZE;
+
 	std::vector<uint8_t> buffer;
-	buffer.resize(block_size);
+	buffer.resize(real_size);
 	for (uint32_t i = 0; i < contents_size; ++i) buffer[i] = ss.get();
-	AES::DecryptData(&buffer[0], block_size, key);
+	AES::DecryptData(&buffer[0], real_size, key);
 	ss.seekg(0); ss.seekp(0);
-	for (uint32_t i = 0; i < block_size; ++i) ss.put(buffer[i]);
+	for (uint32_t i = 0; i < real_size; ++i) ss.put(buffer[i]);
 }

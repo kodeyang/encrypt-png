@@ -21,6 +21,9 @@
     <ClInclude Include="Classes\AES.h">
       <Filter>Classes</Filter>
     </ClInclude>
+    <ClInclude Include="Classes\CRC32.h">
+      <Filter>Classes</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
@@ -28,6 +31,9 @@
       <Filter>Classes</Filter>
     </ClCompile>
     <ClCompile Include="Classes\AES.cpp">
+      <Filter>Classes</Filter>
+    </ClCompile>
+    <ClCompile Include="Classes\CRC32.cpp">
       <Filter>Classes</Filter>
     </ClCompile>
   </ItemGroup>

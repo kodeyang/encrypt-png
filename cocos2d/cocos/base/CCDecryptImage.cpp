@@ -2,6 +2,7 @@
 
 #include <sstream>
 #include "CCAES.h"
+#include "CCCRC32.h"
 #include "ccMacros.h"
 
 #if (CC_TARGET_PLATFORM == CC_PLATFORM_WIN32)
@@ -13,20 +14,17 @@
 
 namespace cocos2d
 {
-	/* CRC码长度 */
+	/* CRC长度 */
 	static const uint32_t CRC_SIZE = 4;
 
 	/* 文件头部 */
 	static const unsigned char HEAD_DATA[] = { 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a };
 
-	/* IEND CRC码 */
+	/* IEND CRC */
 	static const unsigned char IEND_DATA[] = { 0xae, 0x42, 0x60, 0x82 };
 
-	/* 数据块头部（用于验证解密是否成功） */
-	static const unsigned char BLOCK_HEAD[] = { 0x45, 0x6e, 0x63, 0x72, 0x79, 0x70, 0x74, 0x50, 0x4e, 0x47 };
-
 	/* 默认密钥 */
-	static const aes_key DEAULT_KEY = { 0x31, 0x32, 0x33, 0x34, 0x35, 0x36 };
+	static const aes_key DEAULT_KEY = { 0x31, 0x32, 0x33 };
 
 #pragma pack(push, 1)
 
@@ -71,14 +69,16 @@ namespace cocos2d
 
 	void DecryptBlock(std::stringstream &ss, const aes_key &key)
 	{
-		const std::streamoff contents_size = ss.tellp() - ss.tellg();
-		const uint32_t block_size = (uint32_t)(contents_size + AES_BLOCK_SIZE - contents_size % AES_BLOCK_SIZE);
+		const uint32_t contents_size = uint32_t(ss.tellp() - ss.tellg());
+		uint32_t real_size = contents_size;
+		if (real_size % AES_BLOCK_SIZE) real_size += AES_BLOCK_SIZE - contents_size % AES_BLOCK_SIZE;
+
 		std::vector<uint8_t> buffer;
-		buffer.resize(block_size);
+		buffer.resize(real_size);
 		for (uint32_t i = 0; i < contents_size; ++i) buffer[i] = ss.get();
-		AES::DecryptData(&buffer[0], block_size, key);
+		AES::DecryptData(&buffer[0], real_size, key);
 		ss.seekg(0); ss.seekp(0);
-		for (uint32_t i = 0; i < block_size; ++i) ss.put(buffer[i]);
+		for (uint32_t i = 0; i < real_size; ++i) ss.put(buffer[i]);
 	}
 
 	std::vector<unsigned char> DecryptImage(const std::string &filename, Data &data)
@@ -88,9 +88,14 @@ namespace cocos2d
 		// 获取数据块信息位置
 		const uint32_t block_start_pos = ntohl(*reinterpret_cast<uint32_t *>(data.getBytes() + data.getSize() - sizeof(uint32_t)));
 
+		// 获取数据块大小
+		uint32_t block_size;
+		memcpy(&block_size, data.getBytes() + block_start_pos, sizeof(block_size));
+		block_size = ntohl(block_size);
+
 		// 获取数据块信息
 		std::stringstream block_info;
-		for (uint32_t i = block_start_pos; i < data.getSize() - sizeof(uint32_t); ++i)
+		for (uint32_t i = block_start_pos + sizeof(uint32_t); i < data.getSize() - sizeof(uint32_t); ++i)
 		{
 			block_info.put(*(data.getBytes() + i));
 		}
@@ -98,15 +103,10 @@ namespace cocos2d
 		// 解密数据块信息
 		DecryptBlock(block_info, DEAULT_KEY);
 
-		// 验证数据块信息是否解密成功
-		auto block_head = ReadSome<sizeof(BLOCK_HEAD)>(block_info);
-		for (unsigned int i = 0; i < block_head.size(); ++i)
-		{
-			if (block_head[i] != BLOCK_HEAD[i])
-			{
-				CCAssert(false, "the key is wrong!");
-			}
-		}
+		// 验证校验和
+		block_info.seekg(block_size);
+		uint32_t crc32 = ntohl(*reinterpret_cast<uint32_t*>(&ReadSome<sizeof(uint32_t)>(block_info)[0]));
+		CCAssert(crc32 == CRC32(block_info.str().substr(0, block_size)), "crc32 error!");
 
 		// 写入文件头信息
 		std::vector<unsigned char> image_data;
@@ -114,15 +114,14 @@ namespace cocos2d
 		for (auto ch : HEAD_DATA) image_data.push_back(ch);
 
 		// 写入数据块信息
+		block_info.seekg(0);
 		while (true)
 		{
+			CCAssert(block_info.tellg() < block_size, "file format error!");
+
+			// 获取数据块信息
 			Block block;
 			memcpy(&block, &(ReadSome<sizeof(Block)>(block_info)[0]), sizeof(Block));
-			if (block_info.eof())
-			{
-				CCAssert(false, "");
-				CCLOG("the %s file format error!", filename.c_str());
-			}
 
 			// 写入数据块长度和名称
 			char size_buffer[sizeof(block.size)];
@@ -133,6 +132,7 @@ namespace cocos2d
 			block.pos = ntohl(block.pos);
 			block.size = ntohl(block.size);
 
+			// 根据数据块处理内容
 			char block_name[sizeof(block.name) + 1] = { 0 };
 			memcpy(block_name, block.name, sizeof(block.name));
 			if (strcmp(block_name, "IHDR") == 0)
@@ -156,6 +156,7 @@ namespace cocos2d
 				}
 			}
 		}
+
 		return image_data;
 	}
 }
