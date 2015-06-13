@@ -70,6 +70,8 @@ namespace cocos2d
 	void DecryptBlock(std::stringstream &ss, const aes_key &key)
 	{
 		const uint32_t contents_size = uint32_t(ss.tellp() - ss.tellg());
+		assert(contents_size);
+
 		uint32_t real_size = contents_size;
 		if (real_size % AES_BLOCK_SIZE) real_size += AES_BLOCK_SIZE - contents_size % AES_BLOCK_SIZE;
 
