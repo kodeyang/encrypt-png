@@ -1,4 +1,10 @@
-﻿#pragma once
+﻿/**
+ * PNG加密解密
+ * author: zhangpanyi@live.com
+ * https://github.com/zhangpanyi/EncryptPNG
+ */
+
+#pragma once
 
 #include <array>
 #include <vector>
