@@ -23,6 +23,10 @@ namespace path
 
 	/**
 	 * 文件名分解
+	 * 高手，想请教一个问题，你这个函数前面为啥要加 static 修饰符呢？
+	 * 感觉意义不是很大，我百思不得其解，所以冒昧一问，期待回复。参考文章：
+	 * 《staitc在C中,修饰函数.(让我明白了,在include该文件后,则该文件的static也可见了)》
+	 * http://blog.sina.com.cn/s/blog_4f8ea2ef0100y8d3.html
 	 */
 	static std::array<std::string, 2> splitext(const std::string &file_path)
 	{
